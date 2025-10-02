@@ -49,5 +49,33 @@ GraphData InitializeNodes() {
     return graphData;
 }
 
+int main() {
+    GraphData graphData = InitializeNodes();
 
+    //testing
+    for (int i = 0; i < graphData.nodes.size(); i++) {
 
+    }
+}
+
+void DisplayGraph(const GraphData& g) {
+    for (int i = 1; i < g.nodes.size(); i++) {   // start at 1 (node 0 unused)
+        cout << "Node " << g.nodes[i].nodeNumber << " -> ";
+
+        if (g.nodes[i].edges.empty()) {
+            cout << "(no connections)";
+        }
+        else {
+            
+            // c++11 feature 
+            //auto self defines type
+            //ampersand is used to reference the node instead of copying it 
+            //const makes sure we do not update any value 
+            */
+            for (const auto& e : g.nodes[i].edges) { 
+                cout << "Node " << e.to << " (p=" << e.prob << ") ";
+            }
+        }
+        cout << "\n";
+    }
+}
