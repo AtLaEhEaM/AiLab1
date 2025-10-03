@@ -146,14 +146,13 @@ int main() {
     // ------------------------------------------------------------------
     // Shortest path calculation (highest additive reliability)
     // Instead of Dijkstra (which uses logs), we brute-force all paths
-    // and choose the one with the maximum additive reliability.
+    // and choose the one with the maximum reliability.
     // ------------------------------------------------------------------
     vector<vector<int>> allPaths;
     vector<int> path = { start };
     vector<bool> visited(graphData.nodes.size(), false);
     DFSAllPaths(graphData, start, target, path, allPaths, visited);
 
-    // find path with maximum additive reliability
     double bestReliability = -1.0;
     vector<int> bestPath;
 
@@ -177,9 +176,5 @@ int main() {
     else {
         cout << "No path exists.\n";
     }
-
-    // Note: Longest / Second Longest still work via KLongestPaths,
-    // but are not called here anymore.
-
     return 0;
 }
