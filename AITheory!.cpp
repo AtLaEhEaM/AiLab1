@@ -165,7 +165,7 @@ int main() {
         }
     }
 
-    cout << "\nShortest Path (most reliable, additive) from "
+    cout << "\nShortest Path from "
         << start << " to " << target << ":\n";
     if (!bestPath.empty()) {
         cout << "Path: ";
