@@ -1,40 +1,32 @@
-#include <iostream>     
-#include <vector>       // for dynamic arrays (nodes, edges, paths)
-#include <utility>      // for std::pair used in graph initialization
-#include <queue>        // for priority_queue (used in Dijkstra / Yen’s if needed)
-#include <limits>       // for numeric limits (like infinity in pathfinding)
-#include <cmath>        // for math functions (log, exp if needed)
-#include <algorithm>    // for sorting paths (K-longest, reliability ranking)
-#include <iomanip>      // for controlling output precision (fixed, setprecision)
-
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <limits>
+#include <cmath>
+#include <iomanip>
 using namespace std;
 
-// Edge structure: stores a connection to another node and its probability (price)
+// Edge structure
 struct Edge {
-    int connectedNode;   // destination node index
-    double price;        // probability of successful connection
+    int connectedNode;   // destination node
+    double price;        // probability (0 to 1)
 };
 
-// Node structure: represents a node in the graph
+// Node structure
 struct Node {
-    bool isVisited = false;     // helper flag for DFS
-    int nodeNumber = 0;         // unique identifier of node
-    vector<Edge> edges;         // all outgoing edges from this node
+    int nodeNumber = 0;
+    vector<Edge> edges;
 };
 
-// GraphData structure: wraps all nodes into a single graph
+// Graph wrapper
 struct GraphData {
-    vector<Node> nodes; // list of all nodes in the graph
+    vector<Node> nodes;
 };
 
-// forward declaration for graph display
-void DisplayGraph(const GraphData& g);
-
-// Initializes the graph with hardcoded edges
+// Build example graph
 GraphData InitializeNodes() {
-    // Each row represents a node, and pairs are (destination, probability)
     vector<vector<pair<int, double>>> graph = {
-        {}, // node 0 unused for convenience (nodes start from 1)
+        {}, // node 0 unused
         { {2, 0.2}, {3, 0.9}, {9, 0.9} },
         { {7, 0.8}, {3, 0.1} },
         { {5, 0.1}, {4, 0.1}, {7, 0.35} },
@@ -52,129 +44,88 @@ GraphData InitializeNodes() {
 
     for (int i = 1; i < (int)graph.size(); i++) {
         graphData.nodes[i].nodeNumber = i;
-
-        for (int j = 0; j < (int)graph[i].size(); j++) {
-            Edge e;
-            e.connectedNode = graph[i][j].first;
-            e.price = graph[i][j].second;
-            graphData.nodes[i].edges.push_back(e);
+        for (auto& p : graph[i]) {
+            graphData.nodes[i].edges.push_back({ p.first, p.second });
         }
     }
     return graphData;
 }
 
-// Function to run DFS to find all possible paths from start to target
-void DFSAllPaths(const GraphData& g, int u, int target,
-    vector<int>& path, vector<vector<int>>& allPaths,
-    vector<bool>& visited) {
-    if (u == target) {
-        allPaths.push_back(path);
-        return;
-    }
-    visited[u] = true;
+// Dijkstra with multiplicative probability (using -log transform)
+pair<double, vector<int>> DijkstraMostReliable(const GraphData& g, int start, int target) {
+    int n = g.nodes.size();
+    vector<double> dist(n, numeric_limits<double>::infinity());
+    vector<int> parent(n, -1);
 
-    for (const auto& e : g.nodes[u].edges) {
-        int v = e.connectedNode;
-        if (!visited[v]) {
-            path.push_back(v);
-            DFSAllPaths(g, v, target, path, allPaths, visited);
-            path.pop_back();
-        }
-    }
-    visited[u] = false; //hello world
-}
+    using State = pair<double, int>;
+    priority_queue<State, vector<State>, greater<State>> pq;
 
-// Compute total reliability of a path (additive version)
-double PathReliability(const GraphData& g, const vector<int>& path) {
-    double prob = 0.0; // reliability starts at 0 (neutral for addition)
-    for (size_t i = 0; i + 1 < path.size(); i++) {
-        int u = path[i];
-        int v = path[i + 1];
-        for (const auto& e : g.nodes[u].edges) {
-            if (e.connectedNode == v) {
-                prob += e.price; // add probability instead of multiply
-                break;
+    dist[start] = 0.0;
+    pq.push({ 0.0, start });
+
+    while (!pq.empty()) {
+        auto [currDist, u] = pq.top();
+        pq.pop();
+
+        if (currDist > dist[u]) continue;
+
+        for (auto& edge : g.nodes[u].edges) {
+            int v = edge.connectedNode;
+            double w = -log(edge.price);
+
+            if (dist[u] + w < dist[v]) {
+                dist[v] = dist[u] + w;
+                parent[v] = u;
+                pq.push({ dist[v], v });
             }
         }
     }
-    return prob;
-}
 
-// Get K-longest paths (sorted by reliability ascending)
-vector<vector<int>> KLongestPaths(const GraphData& g, int start, int target, int K) {
-    vector<vector<int>> allPaths;
-    vector<int> path = { start };
-    vector<bool> visited(g.nodes.size(), false);
-
-    DFSAllPaths(g, start, target, path, allPaths, visited);
-
-    sort(allPaths.begin(), allPaths.end(), [&](const vector<int>& a, const vector<int>& b) {
-        return PathReliability(g, a) < PathReliability(g, b);
-        });
-
-    if ((int)allPaths.size() > K) {
-        allPaths.resize(K);
+    vector<int> path;
+    if (dist[target] == numeric_limits<double>::infinity()) {
+        return { 0.0, path };
     }
-    return allPaths;
+
+    for (int v = target; v != -1; v = parent[v])
+        path.push_back(v);
+    reverse(path.begin(), path.end());
+
+    double probability = exp(-dist[target]);
+    return { probability, path };
 }
 
-// Utility function to display the graph connections
-void DisplayGraph(const GraphData& g) {
-    for (int i = 1; i < (int)g.nodes.size(); i++) {
-        cout << "Node " << g.nodes[i].nodeNumber << " -> ";
-
-        if (g.nodes[i].edges.empty()) {
-            cout << "(no connections)";
+// Separate function to display path result
+void DisplayPathResult(int start, int target, double prob, const vector<int>& path) {
+    cout << "\nMost Reliable Path from " << start << " to " << target << ":\n";
+    if (!path.empty()) {
+        cout << "Path: ";
+        for (size_t i = 0; i < path.size(); i++) {
+            cout << path[i] << (i + 1 < path.size() ? " -> " : "");
         }
-        else {
-            for (const auto& e : g.nodes[i].edges) {
-                cout << "Node " << e.connectedNode << " (p=" << e.price << ") ";
-            }
-        }
-        cout << "\n";
+        cout << "\nReliability: " << fixed << setprecision(6) << prob << "\n";
+    }
+    else {
+        cout << "No path exists.\n";
     }
 }
 
 int main() {
     GraphData graphData = InitializeNodes();
 
-    DisplayGraph(graphData);
-
     int start = 1;
     int target = 10;
 
-    // ------------------------------------------------------------------
-    // Shortest path calculation (highest additive reliability)
-    // Instead of Dijkstra (which uses logs), we brute-force all paths
-    // and choose the one with the maximum reliability.
-    // ------------------------------------------------------------------
-    vector<vector<int>> allPaths;
-    vector<int> path = { start };
-    vector<bool> visited(graphData.nodes.size(), false);
-    DFSAllPaths(graphData, start, target, path, allPaths, visited);
+   /* auto [prob, path] = DijkstraMostReliable(graphData, start, target);
 
-    double bestReliability = -1.0;
-    vector<int> bestPath;
+    DisplayPathResult(start, target, prob, path);*/
 
-    for (auto& p : allPaths) {
-        double r = PathReliability(graphData, p);
-        if (r > bestReliability) {
-            bestReliability = r;
-            bestPath = p;
-        }
-    }
+    start = (rand() % 9) + 1;
+    target = (rand() % 10) + start;
+    cout << start << " " << target;
 
-    cout << "\nShortest Path from "
-        << start << " to " << target << ":\n";
-    if (!bestPath.empty()) {
-        cout << "Path: ";
-        for (size_t i = 0; i < bestPath.size(); i++) {
-            cout << bestPath[i] << (i + 1 < bestPath.size() ? " -> " : "");
-        }
-        cout << "\nReliability: " << fixed << setprecision(6) << bestReliability << "\n";
-    }
-    else {
-        cout << "No path exists.\n";
-    }
+    auto [prob, path] = DijkstraMostReliable(graphData, start, target);
+
+    DisplayPathResult(start, target, prob, path);
+
     return 0;
 }
